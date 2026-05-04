@@ -5,19 +5,22 @@
 ## 0. 現状 (2026-05-04 時点)
 
 実装済み:
-- グラス用 APK スケルトン (Compose、黒背景、緑テキスト)
-- グラス側ジェスチャハンドリング (`dispatchKeyEvent` で 3 種を捕捉、それ以外は system に流す)
-  - タップ (`KEYCODE_ENTER`) → 表示/非表示トグル
-  - 前スワイプ (`KEYCODE_DPAD_RIGHT`) → 次メッセージ
-  - 後スワイプ (`KEYCODE_DPAD_LEFT`) → 前メッセージ
-  - メッセージリスト: `Hello World` / `こんにちは` / `Bonjour` / `안녕`
-  - DPAD_UP/DOWN (スワイプの副キー) は消費して無視
-  - BACK (1本指ダブルタップ) は通す = アプリが閉じる
+- **グラス側**:
+  - Compose スケルトン (黒背景、緑テキスト)
+  - ジェスチャハンドリング (`dispatchKeyEvent` で 3 種を捕捉)
+    - タップ (`KEYCODE_ENTER`) → 表示/非表示トグル
+    - 前スワイプ (`KEYCODE_DPAD_RIGHT`) → 次メッセージ
+    - 後スワイプ (`KEYCODE_DPAD_LEFT`) → 前メッセージ
+    - メッセージ: `Hello World` / `こんにちは` / `Bonjour` / `안녕`
+    - DPAD_UP/DOWN (副キー) は消費して無視、BACK は通して閉じる
+- **スマホ側**:
+  - Compose UI: 接続状態カード + 認証/接続ボタン + ログタイムライン
+  - Hi Rokid インストール検出 (`PackageManager` + `<queries>`)
+  - `ConnectionService` Foreground Service (`dataSync` 型) — 常駐通知、`POST_NOTIFICATIONS` 要求、`StateFlow<Boolean>` で UI と連動
 
 未実装:
-- スマホ側 UI (今は scaffold のみ、ログ表示なし)
 - CXR 認証 / 接続 / 通信 (両側とも SDK 統合なし)
-- Foreground Service
+- メッセージ送受信
 - 接続状態に応じた UI 切替 ("Phone not connected" 表示)
 
 > ジェスチャ→キーコードの対応根拠は `../GlassGestureProbe/GLASS_GESTURES.md` 参照。実機の `/system/usr/keylayout/Generic.kl` で確認済み。
@@ -182,8 +185,8 @@ CXRL 接続を Activity から切り離して常駐させるため、**Foregroun
 
 - クラス: `ConnectionService : Service`
 - 種別: Foreground Service (`startForeground` 必須)
-- `foregroundServiceType`: **`connectedDevice`** (`0x00000010`)
-  - Hi Rokid 本体のフォアグラウンドサービスと同種別 (今日 dumpsys で確認した型)
+- `foregroundServiceType`: **`dataSync`**
+  - 当初 `connectedDevice` を試したが、Android 14+ の制約で BLUETOOTH_* / WIFI_* / USB 等の物理接続系 permission を最低 1 つ要求される (我々は使わない)。CXR は実態としてデバイス間データ同期なので `dataSync` で適合
 - 通知チャンネル: `cxrl_connection` (低優先、消音)
 - 通知内容: タイトル "HelloToggleCxrl 接続中"、本文に最新ログ (例: `12:34:56  visible=true`)、タップで Activity 復帰
 - 通知は `NO_CLEAR | FOREGROUND_SERVICE`、ユーザーがスワイプで消せない
@@ -192,12 +195,12 @@ CXRL 接続を Activity から切り離して常駐させるため、**Foregroun
 
 ```xml
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
 <service
-    android:name=".connection.ConnectionService"
-    android:foregroundServiceType="connectedDevice"
+    android:name=".ConnectionService"
+    android:foregroundServiceType="dataSync"
     android:exported="false" />
 ```
 
@@ -258,11 +261,11 @@ HelloToggleCxrl/
 ### 完了済み
 1. ✅ グラス側 `MainActivity` の Compose スケルトン (黒背景、緑テキストで "Hello World")
 2. ✅ グラス側ジェスチャハンドリング (tap / swipe_next / swipe_prev → ローカル状態更新、`dispatchKeyEvent` で 3 種を捕捉、BACK は通す)
+3. ✅ スマホ側 UI スケルトン: 接続状態カード + 認証/接続ボタン (ダミー) + ログタイムライン + Hi Rokid インストール検出
+4. ✅ Foreground Service の雛形 (`ConnectionService`): token・接続なしで `dataSync` 型 FGS として起動、常駐通知、`POST_NOTIFICATIONS` ランタイム権限要求
 
 ### これから
 
-3. **スマホ側 UI スケルトン**: `MainActivity` に接続状態カード + ログタイムラインの空枠 (Compose) を作る。CXR 配線なし、ダミーログを流して見た目を確認
-4. **Foreground Service の雛形**: `ConnectionService` を作る。token なし・接続なしで起動するだけ。`startForeground` で常駐通知が出ることだけ確認
 5. **スマホ側認証フロー**: `MainActivity` に `AuthorizationHelper` を組み込み (`cxrlsample101/MainViewModel.kt` 参照)、token を `TokenStore` (EncryptedSharedPreferences) に保存
 6. **CXRLink 接続**: Service が token を使って `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`。接続成功で通知本文を更新
 7. **グラス側 CXRServiceBridge**: `setStatusListener` でスマホ接続状態を StateFlow に流す → 切断時 "Phone not connected" 表示にオーバレイ
@@ -274,5 +277,5 @@ HelloToggleCxrl/
 
 - **token の有効期限**: サンプルは検証していない。実機で長期保持できるか確認が必要。期限がある場合、無効化判定の API があるか調査
 - **グラス側 APK の自動デプロイ経路**: cxrlsample101 が `/sdcard/DCIM/Rokid/cxrL.apk` を Hi Rokid に渡してインストールさせている流れをそのまま踏襲できるか、別ルートが必要か未確認
-- **`foregroundServiceType=connectedDevice`** が CXRL 経由通信に正しいか (Bluetooth/USB 等の物理接続を伴う想定の type なので、ガイドライン上は `dataSync` のほうが適合する可能性あり)。Play 配布しないならどちらでも動くが要確認
+- ~~`foregroundServiceType` の選択~~ → 解決: `dataSync` に決定 (`connectedDevice` は Android 14+ で BLUETOOTH/WIFI/USB 系 permission を要求されるため不適合)
 - **Boot 起動**: 仕様上は対象外。ユーザーから要望が出たら `RECEIVE_BOOT_COMPLETED` + `BootReceiver` を追加する想定

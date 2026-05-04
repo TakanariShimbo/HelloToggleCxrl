@@ -1,11 +1,16 @@
 package com.example.hellotoggle.phone
 
+import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -95,8 +100,26 @@ fun MainScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val hiRokidInstalled = remember { isPackageInstalled(context, HI_ROKID_PKG) }
     var authorized by remember { mutableStateOf(false) }
-    var connection by remember { mutableStateOf(ConnectionState.DISCONNECTED) }
+    val running by ConnectionService.running.collectAsState()
+    val connection = if (running) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
     val entries by PhoneLog.entries.collectAsState()
+
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) ConnectionService.start(context)
+    }
+
+    val startService = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            ConnectionService.start(context)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -113,9 +136,12 @@ fun MainScreen(modifier: Modifier = Modifier) {
             authorized = authorized,
             connection = connection,
             onAuth = { authorized = true },
-            onReauth = { authorized = false; connection = ConnectionState.DISCONNECTED },
-            onConnect = { connection = ConnectionState.CONNECTED },
-            onDisconnect = { connection = ConnectionState.DISCONNECTED },
+            onReauth = {
+                authorized = false
+                ConnectionService.stop(context)
+            },
+            onConnect = startService,
+            onDisconnect = { ConnectionService.stop(context) },
             onAddDummyLog = { PhoneLog.add(makeDummyEntry()) },
         )
         LogTimeline(entries = entries, onClear = PhoneLog::clear)
