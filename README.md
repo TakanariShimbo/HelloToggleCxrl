@@ -1,6 +1,6 @@
 # HelloToggleCxrl
 
-**グラス主導アプリのテンプレート**。Rokid RG-glasses (Hi Rokid OS) を主役にして、スマホは「最初に 1 回だけ触って後は忘れていい companion」として裏方に徹する構成のサンプル。
+**グラス主導アプリのテンプレート**。Rokid Glasses (YodaOS SPRITE) を主役にして、スマホは「最初に 1 回だけ触って後は忘れていい companion」として裏方に徹する構成のサンプル。
 
 ## このプロジェクトの狙い
 
@@ -17,7 +17,7 @@
 
 | | phone | glass |
 |---|---|---|
-| 端末 | Pixel 8 (Android 14+) | Rokid RG-glasses (Hi Rokid OS / Android 12) |
+| 端末 | Pixel 8 (Android 14+) | Rokid Glasses (YodaOS SPRITE / Android 12 ベース) |
 | パッケージ | `com.example.hellotoggle.phone` | `com.example.hellotoggle.glass` |
 | 役割 | 認証 / 接続維持 / ログ受信表示 (バックグラウンド) | UI 描画 / ジェスチャ入力 / イベント送信 (主役) |
 
@@ -34,7 +34,7 @@
 | 後スワイプ | `KEYCODE_DPAD_LEFT` | 前のメッセージへ |
 | ダブルタップ | `KEYCODE_BACK` | アプリ終了 (system に通す) |
 
-ジェスチャ→キーコードの対応根拠 / Hi Rokid OS の予約ジェスチャ一覧は `GlassGestureProbe/GLASS_GESTURES.md` (別 repo) を参照。
+ジェスチャ→キーコードの対応根拠 / YodaOS SPRITE の予約ジェスチャ一覧は `GlassGestureProbe/GLASS_GESTURES.md` (別 repo) を参照。
 
 ### スマホ側
 - Hi Rokid 認証 → token を `EncryptedSharedPreferences` に永続化
@@ -111,7 +111,7 @@ cd glass && ./gradlew installDebug
 
 事前条件:
 - スマホに Hi Rokid (`com.rokid.sprite.global.aiapp`) インストール済 + グラスとペアリング済
-- グラスは Hi Rokid OS が稼働中
+- グラスは YodaOS SPRITE が稼働中
 
 実行手順:
 1. スマホでアプリ起動 → `[認証]` (初回のみ、Hi Rokid の認証ダイアログが出る)
