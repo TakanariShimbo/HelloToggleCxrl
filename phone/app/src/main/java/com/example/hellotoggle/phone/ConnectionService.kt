@@ -10,15 +10,28 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.cxrglobal.CXRLink
+import com.example.cxrglobal.CxrDefs
+import com.example.cxrglobal.callbacks.ICXRLinkCbk
+import com.example.cxrglobal.callbacks.IGlassAppCbk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+private const val TAG = "ConnectionService"
 private const val CHANNEL_ID = "cxrl_connection"
 private const val NOTIF_ID = 1
+private const val GLASS_APP_PKG = "com.example.hellotoggle.glass"
+private const val GLASS_MAIN_ACTIVITY = "com.example.hellotoggle.glass.MainActivity"
 
 class ConnectionService : Service() {
+
+    private var cxrLink: CXRLink? = null
+    private var lConnected = false
+    private var btConnected = false
+    private var appStarted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -26,7 +39,98 @@ class ConnectionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notif = buildNotification("待機中")
+        startForegroundCompat("待機中")
+        _running.value = true
+
+        val token = TokenStore.token.value
+        if (token.isNullOrBlank()) {
+            Log.w(TAG, "no token, foreground only (idle)")
+            updateConnectionState(CxrConnState.DISCONNECTED, "token なし — 認証してください")
+            return START_STICKY
+        }
+
+        startLink(token)
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        _running.value = false
+        runCatching { cxrLink?.disconnect() }
+        cxrLink = null
+        lConnected = false
+        btConnected = false
+        appStarted = false
+        _connState.value = CxrConnState.DISCONNECTED
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun startLink(token: String) {
+        Log.d(TAG, "startLink token len=${token.length}")
+        updateConnectionState(CxrConnState.CONNECTING, "接続中…")
+        cxrLink = CXRLink(this).apply {
+            configCXRSession(
+                CxrDefs.CXRSession(
+                    CxrDefs.CXRSessionType.CUSTOMAPP,
+                    GLASS_APP_PKG,
+                ),
+            )
+            setCXRLinkCbk(object : ICXRLinkCbk {
+                override fun onCXRLConnected(connected: Boolean) {
+                    Log.d(TAG, "onCXRLConnected: $connected")
+                    lConnected = connected
+                    refreshConnState()
+                }
+
+                override fun onGlassBtConnected(connected: Boolean) {
+                    Log.d(TAG, "onGlassBtConnected: $connected")
+                    btConnected = connected
+                    refreshConnState()
+                }
+
+                override fun onGlassAiAssistStart() {}
+                override fun onGlassAiAssistStop() {}
+            })
+            connect(token)
+        }
+    }
+
+    private fun refreshConnState() {
+        val state = when {
+            lConnected && btConnected -> CxrConnState.CONNECTED
+            else -> CxrConnState.CONNECTING
+        }
+        val text = when (state) {
+            CxrConnState.CONNECTED -> "接続済み"
+            CxrConnState.CONNECTING -> "接続中… (L=$lConnected BT=$btConnected)"
+            CxrConnState.DISCONNECTED -> "切断"
+        }
+        updateConnectionState(state, text)
+        if (state == CxrConnState.CONNECTED && !appStarted) {
+            appStarted = true
+            Log.d(TAG, "appStart $GLASS_MAIN_ACTIVITY")
+            cxrLink?.appStart(GLASS_MAIN_ACTIVITY, object : IGlassAppCbk {
+                override fun onOpenAppResult(success: Boolean) {
+                    Log.d(TAG, "onOpenAppResult: $success")
+                }
+
+                override fun onGlassAppResume(resume: Boolean) {
+                    Log.d(TAG, "onGlassAppResume: $resume")
+                }
+            })
+        }
+    }
+
+    private fun updateConnectionState(state: CxrConnState, notifText: String) {
+        _connState.value = state
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        nm.notify(NOTIF_ID, buildNotification(notifText))
+    }
+
+    private fun startForegroundCompat(text: String) {
+        val notif = buildNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIF_ID,
@@ -36,17 +140,7 @@ class ConnectionService : Service() {
         } else {
             startForeground(NOTIF_ID, notif)
         }
-        _running.value = true
-        return START_STICKY
     }
-
-    override fun onDestroy() {
-        _running.value = false
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        super.onDestroy()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createChannel() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
@@ -69,7 +163,7 @@ class ConnectionService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("HelloToggleCxrl 接続中")
+            .setContentTitle("HelloToggleCxrl")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentIntent(pi)
@@ -80,6 +174,9 @@ class ConnectionService : Service() {
     companion object {
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running.asStateFlow()
+
+        private val _connState = MutableStateFlow(CxrConnState.DISCONNECTED)
+        val connState: StateFlow<CxrConnState> = _connState.asStateFlow()
 
         fun start(context: Context) {
             val intent = Intent(context, ConnectionService::class.java)
@@ -92,3 +189,5 @@ class ConnectionService : Service() {
         }
     }
 }
+
+enum class CxrConnState { DISCONNECTED, CONNECTING, CONNECTED }

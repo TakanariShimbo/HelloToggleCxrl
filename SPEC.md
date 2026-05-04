@@ -18,9 +18,9 @@
   - Hi Rokid インストール検出 (`PackageManager` + `<queries>`)
   - `ConnectionService` Foreground Service (`dataSync` 型) — 常駐通知、`POST_NOTIFICATIONS` 要求、`StateFlow<Boolean>` で UI と連動
   - 認証フロー: `AuthorizationHelper` 経由で Hi Rokid に auth、token を `TokenStore` (EncryptedSharedPreferences) で永続化
+  - CXRLink 接続: Service 内で `CXRLink.connect(token)` + `appStart(MainActivity)` でグラス側 foreground 化、L/BT 両層の状態を `StateFlow` で公開
 
 未実装:
-- CXRLink 接続 (token はあるが `connect()` していない)
 - グラス側 `CXRServiceBridge` 統合
 - メッセージ送受信
 - 接続状態に応じた UI 切替 ("Phone not connected" 表示)
@@ -266,6 +266,7 @@ HelloToggleCxrl/
 3. ✅ スマホ側 UI スケルトン: 接続状態カード + 認証/接続ボタン (ダミー) + ログタイムライン + Hi Rokid インストール検出
 4. ✅ Foreground Service の雛形 (`ConnectionService`): token・接続なしで `dataSync` 型 FGS として起動、常駐通知、`POST_NOTIFICATIONS` ランタイム権限要求
 5. ✅ スマホ側認証フロー: `AuthorizationHelper` で Hi Rokid に auth リクエスト、`onActivityResult` (deprecated) で結果受け、`TokenStore` (EncryptedSharedPreferences) で token 永続化、再起動後も復元
+6. ✅ CXRLink 接続: Service が `CXRLink` を生成 → `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`、`onCXRLConnected`/`onGlassBtConnected` 両方 true で **CONNECTED**、フル接続で **`appStart(MainActivity, IGlassAppCbk)`** を 1 回呼んでグラス側を foreground に上げる (これがないと launcher が focus を奪う)。通知本文も状態と連動
 
 ### これから
 6. **CXRLink 接続**: Service が token を使って `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`。接続成功で通知本文を更新

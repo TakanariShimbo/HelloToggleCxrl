@@ -132,7 +132,12 @@ fun MainScreen(
     val token by TokenStore.token.collectAsState()
     val authorized = token != null
     val running by ConnectionService.running.collectAsState()
-    val connection = if (running) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
+    val cxrState by ConnectionService.connState.collectAsState()
+    val connection = when {
+        !running -> ConnectionState.DISCONNECTED
+        cxrState == CxrConnState.CONNECTED -> ConnectionState.CONNECTED
+        else -> ConnectionState.CONNECTING
+    }
     val entries by PhoneLog.entries.collectAsState()
 
     val notifPermLauncher = rememberLauncherForActivityResult(
