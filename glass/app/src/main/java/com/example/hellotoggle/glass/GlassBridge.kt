@@ -1,5 +1,7 @@
 package com.example.hellotoggle.glass
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.rokid.cxr.CXRServiceBridge
 import com.rokid.cxr.Caps
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 private const val TAG = "GlassBridge"
 private const val CHANNEL_FROM_PHONE = "rk_custom_client"
 private const val CHANNEL_TO_PHONE = "rk_custom_key"
+private const val PING_TIMEOUT_MS = 12_000L
 
 enum class BridgeStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
@@ -21,6 +24,21 @@ object GlassBridge {
 
     private val _sessionOpen = MutableStateFlow(false)
     val sessionOpen: StateFlow<Boolean> = _sessionOpen.asStateFlow()
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val pingTimeoutRunnable = Runnable {
+        Log.d(TAG, "ping timeout, marking session closed")
+        _sessionOpen.value = false
+    }
+
+    private fun armPingWatchdog() {
+        mainHandler.removeCallbacks(pingTimeoutRunnable)
+        mainHandler.postDelayed(pingTimeoutRunnable, PING_TIMEOUT_MS)
+    }
+
+    private fun stopPingWatchdog() {
+        mainHandler.removeCallbacks(pingTimeoutRunnable)
+    }
 
     fun init() {
         if (bridge != null) return
@@ -35,6 +53,7 @@ object GlassBridge {
                     Log.d(TAG, "onDisconnected")
                     _status.value = BridgeStatus.DISCONNECTED
                     _sessionOpen.value = false
+                    stopPingWatchdog()
                 }
 
                 override fun onConnecting(p0: String?, p1: String?, p2: Int) {
@@ -48,23 +67,32 @@ object GlassBridge {
             subscribe(CHANNEL_FROM_PHONE, object : CXRServiceBridge.MsgCallback {
                 override fun onReceive(name: String?, args: Caps?, bytes: ByteArray?) {
                     val event = readEvent(args)
-                    Log.d(TAG, "received on $name: event=$event")
+                    if (event != "ping") Log.d(TAG, "received on $name: event=$event")
                     when (event) {
-                        "session_open" -> _sessionOpen.value = true
-                        "session_close" -> _sessionOpen.value = false
+                        "session_open" -> {
+                            _sessionOpen.value = true
+                            armPingWatchdog()
+                        }
+                        "session_close" -> {
+                            _sessionOpen.value = false
+                            stopPingWatchdog()
+                        }
+                        "ping" -> armPingWatchdog()
                     }
                 }
             })
         }
     }
 
-    fun sendCaps(caps: Caps) {
+    fun sendCaps(caps: Caps): Int {
         val b = bridge
         if (b == null) {
             Log.w(TAG, "sendCaps: bridge not initialized")
-            return
+            return -1
         }
-        b.sendMessage(CHANNEL_TO_PHONE, caps)
+        val rc = b.sendMessage(CHANNEL_TO_PHONE, caps)
+        Log.d(TAG, "sendMessage($CHANNEL_TO_PHONE) -> $rc")
+        return rc
     }
 
     fun sendGesture(event: String, visible: Boolean, index: Int, message: String) {

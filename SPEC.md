@@ -21,15 +21,17 @@
   - CXRLink 接続: Service 内で `CXRLink.connect(token)` + `appStart(MainActivity)` でグラス側 foreground 化、L/BT 両層の状態を `StateFlow` で公開
   - セッション handshake: `appStart` 後に `session_open` をグラスへ送信、`onDestroy` で `session_close` を送信
   - メッセージ受信: `setCXRCustomCmdCbk` で `rk_custom_key` を受信、`Caps` を decode して `PhoneLog` に追記
+  - 5 秒ごとに `event:"ping"` を `rk_custom_client` へ送信し続ける heartbeat
 - **グラス側**:
   - `GlassBridge` で `CXRServiceBridge` をラップ、接続状態とセッション状態を `StateFlow` で公開
   - 接続無し/セッション無しで「Phone not connected」(赤) を表示、両方 OK でメッセージ表示
   - ジェスチャ発生時に `Caps` を組んで `rk_custom_key` チャンネルへ送信 (fully connected のときのみ)
+  - 12 秒 ping 無受信で `sessionOpen=false` に切替する watchdog
 
-未実装 (Step 10 = 仕上げ):
-- 自動再接続 (BT 切断 → 復帰時の再 connect/handshake)
-- token 期限切れ時の auth エラー検出 → 強制再認証
-- 各種エラー UI (Hi Rokid 未インストール時の誘導、認証失敗の表示など)
+未実装 (オプション、優先度低):
+- BT 物理切断 → 復帰時の自動再接続フロー (今は phone で `[接続停止]`/`[接続開始]` を再操作する必要)
+- token 期限切れ時の auth エラー検出 → 強制再認証 UI
+- Hi Rokid 未インストール時のストア誘導
 
 > ジェスチャ→キーコードの対応根拠は `../GlassGestureProbe/GLASS_GESTURES.md` 参照。実機の `/system/usr/keylayout/Generic.kl` で確認済み。
 
@@ -280,8 +282,9 @@ HelloToggleCxrl/
    - グラス UI: BT 接続 (`BridgeStatus.CONNECTED`) AND `sessionOpen=true` のときだけメッセージ表示、それ以外は **"Phone not connected"** (赤) を表示。BT 物理切断と app 側 `[接続停止]` の両方で即座に切り替わる
 8. ✅ グラス→スマホ ジェスチャ送信: `dispatchKeyEvent` で各ジェスチャ確定後に `GlassBridge.sendGesture(event, visible, index, message)` を呼び、`Caps` を組んで `rk_custom_key` チャンネルへ送信。fully connected でない時は無送信
 9. ✅ スマホ受信→ログ反映: `setCXRCustomCmdCbk` で `rk_custom_key` 受信、`Caps` を positional でデコードして `LogEntry` に変換、`PhoneLog.add()`。debug 用ダミーログボタンは撤去
+10. ✅ Heartbeat による silent kill 検出: phone が `session_open` 後に 5 秒ごとに `event:"ping"` を送信、glass は受信のたびに 12 秒の watchdog を再 arm、12 秒無音なら `sessionOpen=false` で UI を「Phone not connected」に切替。`am force-stop` 等で phone が onDestroy なしに死んだケースをカバー
 
-### これから
+### これから (オプション)
 6. **CXRLink 接続**: Service が token を使って `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`。接続成功で通知本文を更新
 7. **グラス側 CXRServiceBridge**: `setStatusListener` でスマホ接続状態を StateFlow に流す → 切断時 "Phone not connected" 表示にオーバレイ
 8. **メッセージ送信**: グラスの状態変化のたびに `sendMessage("rk_custom_key", caps)` を送出 (Caps の組み立ては §4.2)

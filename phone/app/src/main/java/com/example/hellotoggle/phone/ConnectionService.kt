@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.cxrglobal.CXRLink
@@ -29,6 +31,7 @@ private const val GLASS_APP_PKG = "com.example.hellotoggle.glass"
 private const val GLASS_MAIN_ACTIVITY = "com.example.hellotoggle.glass.MainActivity"
 private const val CHANNEL_TO_GLASS = "rk_custom_client"
 private const val CHANNEL_FROM_GLASS = "rk_custom_key"
+private const val HEARTBEAT_INTERVAL_MS = 5_000L
 
 class ConnectionService : Service() {
 
@@ -36,6 +39,13 @@ class ConnectionService : Service() {
     private var lConnected = false
     private var btConnected = false
     private var appStarted = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            sendSessionEvent("ping")
+            mainHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -59,6 +69,7 @@ class ConnectionService : Service() {
 
     override fun onDestroy() {
         _running.value = false
+        mainHandler.removeCallbacks(heartbeatRunnable)
         sendSessionEvent("session_close")
         runCatching { cxrLink?.disconnect() }
         cxrLink = null
@@ -152,7 +163,7 @@ class ConnectionService : Service() {
 
     private fun sendSessionEvent(event: String) {
         val link = cxrLink ?: return
-        Log.d(TAG, "send $event")
+        if (event != "ping") Log.d(TAG, "send $event")
         val payload = Caps().apply {
             write("event")
             write(event)
@@ -161,6 +172,13 @@ class ConnectionService : Service() {
         }.serialize()
         runCatching { link.sendCustomCmd(CHANNEL_TO_GLASS, payload) }
             .onFailure { Log.w(TAG, "sendSessionEvent($event) failed", it) }
+        when (event) {
+            "session_open" -> {
+                mainHandler.removeCallbacks(heartbeatRunnable)
+                mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
+            }
+            "session_close" -> mainHandler.removeCallbacks(heartbeatRunnable)
+        }
     }
 
     private fun updateConnectionState(state: CxrConnState, notifText: String) {
