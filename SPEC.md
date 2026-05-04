@@ -17,9 +17,11 @@
   - Compose UI: 接続状態カード + 認証/接続ボタン + ログタイムライン
   - Hi Rokid インストール検出 (`PackageManager` + `<queries>`)
   - `ConnectionService` Foreground Service (`dataSync` 型) — 常駐通知、`POST_NOTIFICATIONS` 要求、`StateFlow<Boolean>` で UI と連動
+  - 認証フロー: `AuthorizationHelper` 経由で Hi Rokid に auth、token を `TokenStore` (EncryptedSharedPreferences) で永続化
 
 未実装:
-- CXR 認証 / 接続 / 通信 (両側とも SDK 統合なし)
+- CXRLink 接続 (token はあるが `connect()` していない)
+- グラス側 `CXRServiceBridge` 統合
 - メッセージ送受信
 - 接続状態に応じた UI 切替 ("Phone not connected" 表示)
 
@@ -263,10 +265,9 @@ HelloToggleCxrl/
 2. ✅ グラス側ジェスチャハンドリング (tap / swipe_next / swipe_prev → ローカル状態更新、`dispatchKeyEvent` で 3 種を捕捉、BACK は通す)
 3. ✅ スマホ側 UI スケルトン: 接続状態カード + 認証/接続ボタン (ダミー) + ログタイムライン + Hi Rokid インストール検出
 4. ✅ Foreground Service の雛形 (`ConnectionService`): token・接続なしで `dataSync` 型 FGS として起動、常駐通知、`POST_NOTIFICATIONS` ランタイム権限要求
+5. ✅ スマホ側認証フロー: `AuthorizationHelper` で Hi Rokid に auth リクエスト、`onActivityResult` (deprecated) で結果受け、`TokenStore` (EncryptedSharedPreferences) で token 永続化、再起動後も復元
 
 ### これから
-
-5. **スマホ側認証フロー**: `MainActivity` に `AuthorizationHelper` を組み込み (`cxrlsample101/MainViewModel.kt` 参照)、token を `TokenStore` (EncryptedSharedPreferences) に保存
 6. **CXRLink 接続**: Service が token を使って `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`。接続成功で通知本文を更新
 7. **グラス側 CXRServiceBridge**: `setStatusListener` でスマホ接続状態を StateFlow に流す → 切断時 "Phone not connected" 表示にオーバレイ
 8. **メッセージ送信**: グラスの状態変化のたびに `sendMessage("rk_custom_key", caps)` を送出 (Caps の組み立ては §4.2)

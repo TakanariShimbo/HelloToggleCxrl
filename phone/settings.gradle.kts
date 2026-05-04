@@ -17,6 +17,8 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.rokid.com/repository/maven-public/") }
         google()
         mavenCentral()
     }
@@ -24,4 +26,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "phone"
 include(":app")
- 
+
+includeBuild("../../CxrGlobal") {
+    dependencySubstitution {
+        substitute(module("com.example.cxrglobal:lib")).using(project(":lib"))
+    }
+}

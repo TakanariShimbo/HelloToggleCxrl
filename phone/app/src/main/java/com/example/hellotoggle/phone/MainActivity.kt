@@ -2,9 +2,11 @@ package com.example.hellotoggle.phone
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,6 +14,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
+import com.example.cxrglobal.auth.AuthResult
+import com.example.cxrglobal.auth.AuthorizationHelper
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,25 +85,52 @@ object PhoneLog {
 
 enum class ConnectionState { DISCONNECTED, CONNECTING, CONNECTED }
 
+private const val AUTH_REQUEST_CODE = 1001
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        TokenStore.load(this)
         setContent {
             PhoneTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MainScreen(modifier = Modifier.padding(innerPadding))
+                    MainScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        onRequestAuth = {
+                            AuthorizationHelper.requestAuthorization(this, AUTH_REQUEST_CODE)
+                        },
+                    )
                 }
             }
+        }
+    }
+
+    @Deprecated("required by AuthorizationHelper SDK callback")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != AUTH_REQUEST_CODE) return
+        when (val result = AuthorizationHelper.parseAuthorizationResult(resultCode, data)) {
+            is AuthResult.AuthSuccess -> {
+                Log.d("HelloToggleCxrl", "auth success, token len=${result.token.length}")
+                TokenStore.save(this, result.token)
+            }
+            is AuthResult.AuthFail -> Log.d("HelloToggleCxrl", "auth failed")
+            is AuthResult.AuthCancel -> Log.d("HelloToggleCxrl", "auth cancelled")
         }
     }
 }
 
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
+fun MainScreen(
+    modifier: Modifier = Modifier,
+    onRequestAuth: () -> Unit = {},
+) {
     val context = LocalContext.current
     val hiRokidInstalled = remember { isPackageInstalled(context, HI_ROKID_PKG) }
-    var authorized by remember { mutableStateOf(false) }
+    val token by TokenStore.token.collectAsState()
+    val authorized = token != null
     val running by ConnectionService.running.collectAsState()
     val connection = if (running) ConnectionState.CONNECTED else ConnectionState.DISCONNECTED
     val entries by PhoneLog.entries.collectAsState()
@@ -135,10 +166,10 @@ fun MainScreen(modifier: Modifier = Modifier) {
         ActionButtons(
             authorized = authorized,
             connection = connection,
-            onAuth = { authorized = true },
+            onAuth = onRequestAuth,
             onReauth = {
-                authorized = false
                 ConnectionService.stop(context)
+                TokenStore.clear(context)
             },
             onConnect = startService,
             onDisconnect = { ConnectionService.stop(context) },
