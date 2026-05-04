@@ -57,10 +57,28 @@ class MainActivity : ComponentActivity() {
         }
         if (!handled) return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_ENTER -> helloVisible = !helloVisible
-                KeyEvent.KEYCODE_DPAD_RIGHT -> index = (index + 1).mod(MESSAGES.size)
-                KeyEvent.KEYCODE_DPAD_LEFT -> index = (index - 1).mod(MESSAGES.size)
+            val gestureEvent: String? = when (event.keyCode) {
+                KeyEvent.KEYCODE_ENTER -> {
+                    helloVisible = !helloVisible
+                    "tap"
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    index = (index + 1).mod(MESSAGES.size)
+                    "swipe_next"
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    index = (index - 1).mod(MESSAGES.size)
+                    "swipe_prev"
+                }
+                else -> null
+            }
+            if (gestureEvent != null) {
+                GlassBridge.sendGesture(
+                    event = gestureEvent,
+                    visible = helloVisible,
+                    index = index,
+                    message = MESSAGES[index],
+                )
             }
         }
         return true

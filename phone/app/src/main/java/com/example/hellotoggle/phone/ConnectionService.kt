@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.example.cxrglobal.CXRLink
 import com.example.cxrglobal.CxrDefs
 import com.example.cxrglobal.callbacks.ICXRLinkCbk
+import com.example.cxrglobal.callbacks.ICustomCmdCbk
 import com.example.cxrglobal.callbacks.IGlassAppCbk
 import com.rokid.cxr.Caps
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ private const val NOTIF_ID = 1
 private const val GLASS_APP_PKG = "com.example.hellotoggle.glass"
 private const val GLASS_MAIN_ACTIVITY = "com.example.hellotoggle.glass.MainActivity"
 private const val CHANNEL_TO_GLASS = "rk_custom_client"
+private const val CHANNEL_FROM_GLASS = "rk_custom_key"
 
 class ConnectionService : Service() {
 
@@ -96,9 +98,29 @@ class ConnectionService : Service() {
                 override fun onGlassAiAssistStart() {}
                 override fun onGlassAiAssistStop() {}
             })
+            setCXRCustomCmdCbk(object : ICustomCmdCbk {
+                override fun onCustomCmdResult(key: String, payload: ByteArray) {
+                    if (key != CHANNEL_FROM_GLASS) return
+                    val caps = Caps.fromBytes(payload) ?: return
+                    val entry = parseGestureEntry(caps) ?: return
+                    PhoneLog.add(entry)
+                }
+            })
             connect(token)
         }
     }
+
+    private fun parseGestureEntry(caps: Caps): LogEntry? = runCatching {
+        // wire format: "event", <event>, "visible", <0|1>, "index", <int>, "message", <string>, "ts", <long>
+        if (caps.size() < 10) return@runCatching null
+        LogEntry(
+            ts = caps.at(9).long,
+            event = caps.at(1).string,
+            visible = caps.at(3).int != 0,
+            index = caps.at(5).int,
+            message = caps.at(7).string,
+        )
+    }.onFailure { Log.w(TAG, "parseGestureEntry failed", it) }.getOrNull()
 
     private fun refreshConnState() {
         val state = when {

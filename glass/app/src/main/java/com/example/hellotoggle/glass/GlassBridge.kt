@@ -67,6 +67,26 @@ object GlassBridge {
         b.sendMessage(CHANNEL_TO_PHONE, caps)
     }
 
+    fun sendGesture(event: String, visible: Boolean, index: Int, message: String) {
+        if (_status.value != BridgeStatus.CONNECTED || !_sessionOpen.value) {
+            Log.d(TAG, "sendGesture skipped (status=${_status.value} sessionOpen=${_sessionOpen.value})")
+            return
+        }
+        val caps = Caps().apply {
+            write("event")
+            write(event)
+            write("visible")
+            writeInt32(if (visible) 1 else 0)
+            write("index")
+            writeInt32(index)
+            write("message")
+            write(message)
+            write("ts")
+            writeInt64(System.currentTimeMillis())
+        }
+        sendCaps(caps)
+    }
+
     private fun readEvent(caps: Caps?): String? {
         if (caps == null) return null
         for (i in 0 until caps.size() - 1) {

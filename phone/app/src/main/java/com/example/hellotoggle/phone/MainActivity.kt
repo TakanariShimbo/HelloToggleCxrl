@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -178,7 +177,6 @@ fun MainScreen(
             },
             onConnect = startService,
             onDisconnect = { ConnectionService.stop(context) },
-            onAddDummyLog = { PhoneLog.add(makeDummyEntry()) },
         )
         LogTimeline(entries = entries, onClear = PhoneLog::clear)
     }
@@ -225,7 +223,6 @@ private fun ActionButtons(
     onReauth: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
-    onAddDummyLog: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -242,7 +239,6 @@ private fun ActionButtons(
                 enabled = connection != ConnectionState.DISCONNECTED,
             ) { Text("接続停止") }
         }
-        OutlinedButton(onClick = onAddDummyLog) { Text("[debug] add dummy log") }
     }
 }
 
@@ -279,16 +275,3 @@ private fun LogTimeline(entries: List<LogEntry>, onClear: () -> Unit) {
     }
 }
 
-private val DUMMY_EVENTS = listOf("tap", "swipe_next", "swipe_prev")
-private val DUMMY_MESSAGES = listOf("Hello World", "こんにちは", "Bonjour", "안녕")
-
-private fun makeDummyEntry(): LogEntry {
-    val idx = DUMMY_MESSAGES.indices.random()
-    return LogEntry(
-        ts = System.currentTimeMillis(),
-        event = DUMMY_EVENTS.random(),
-        visible = (0..1).random() == 1,
-        index = idx,
-        message = DUMMY_MESSAGES[idx],
-    )
-}
