@@ -49,6 +49,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("com.example.cxrglobal:lib:0.1.0-SNAPSHOT")
+    // Borrow Caps serializer from the original Rokid SDK (wire-compatible with the glass side).
+    implementation("com.rokid.cxr:client-l:1.0.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

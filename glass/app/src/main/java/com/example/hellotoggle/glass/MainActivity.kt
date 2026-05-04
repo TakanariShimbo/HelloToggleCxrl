@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,10 +33,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        GlassBridge.init()
         setContent {
+            val bridgeStatus by GlassBridge.status.collectAsState()
+            val sessionOpen by GlassBridge.sessionOpen.collectAsState()
             HelloWorldScreen(
                 message = MESSAGES[index],
                 visible = helloVisible,
+                bridgeStatus = bridgeStatus,
+                sessionOpen = sessionOpen,
             )
         }
     }
@@ -62,25 +68,65 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HelloWorldScreen(message: String, visible: Boolean) {
+fun HelloWorldScreen(
+    message: String,
+    visible: Boolean,
+    bridgeStatus: BridgeStatus,
+    sessionOpen: Boolean,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        if (visible) {
-            Text(
-                text = message,
-                color = Color(0xFF00AF00),
-                fontSize = 56.sp,
-            )
+        val fullyConnected = bridgeStatus == BridgeStatus.CONNECTED && sessionOpen
+        when {
+            fullyConnected -> {
+                if (visible) {
+                    Text(
+                        text = message,
+                        color = Color(0xFF00AF00),
+                        fontSize = 56.sp,
+                    )
+                }
+            }
+            bridgeStatus == BridgeStatus.CONNECTING -> {
+                Text(
+                    text = "Connecting…",
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 32.sp,
+                )
+            }
+            else -> {
+                Text(
+                    text = "Phone not connected",
+                    color = Color(0xFFC04040),
+                    fontSize = 32.sp,
+                )
+            }
         }
     }
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFF000000, widthDp = 480, heightDp = 270)
 @Composable
-private fun HelloWorldPreview() {
-    HelloWorldScreen(message = "Hello World", visible = true)
+private fun HelloWorldConnectedPreview() {
+    HelloWorldScreen(
+        message = "Hello World",
+        visible = true,
+        bridgeStatus = BridgeStatus.CONNECTED,
+        sessionOpen = true,
+    )
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000, widthDp = 480, heightDp = 270)
+@Composable
+private fun HelloWorldDisconnectedPreview() {
+    HelloWorldScreen(
+        message = "Hello World",
+        visible = true,
+        bridgeStatus = BridgeStatus.DISCONNECTED,
+        sessionOpen = false,
+    )
 }

@@ -19,11 +19,14 @@
   - `ConnectionService` Foreground Service (`dataSync` 型) — 常駐通知、`POST_NOTIFICATIONS` 要求、`StateFlow<Boolean>` で UI と連動
   - 認証フロー: `AuthorizationHelper` 経由で Hi Rokid に auth、token を `TokenStore` (EncryptedSharedPreferences) で永続化
   - CXRLink 接続: Service 内で `CXRLink.connect(token)` + `appStart(MainActivity)` でグラス側 foreground 化、L/BT 両層の状態を `StateFlow` で公開
+  - セッション handshake: `appStart` 後に `session_open` をグラスへ送信、`onDestroy` で `session_close` を送信
+- **グラス側**:
+  - `GlassBridge` で `CXRServiceBridge` をラップ、接続状態とセッション状態を `StateFlow` で公開
+  - 接続無し/セッション無しで「Phone not connected」(赤) を表示、両方 OK でメッセージ表示
 
 未実装:
-- グラス側 `CXRServiceBridge` 統合
-- メッセージ送受信
-- 接続状態に応じた UI 切替 ("Phone not connected" 表示)
+- グラス→スマホのジェスチャメッセージ送信 (`sendMessage("rk_custom_key", caps)`)
+- スマホ側でメッセージ受信してログタイムラインに追加
 
 > ジェスチャ→キーコードの対応根拠は `../GlassGestureProbe/GLASS_GESTURES.md` 参照。実機の `/system/usr/keylayout/Generic.kl` で確認済み。
 
@@ -267,6 +270,11 @@ HelloToggleCxrl/
 4. ✅ Foreground Service の雛形 (`ConnectionService`): token・接続なしで `dataSync` 型 FGS として起動、常駐通知、`POST_NOTIFICATIONS` ランタイム権限要求
 5. ✅ スマホ側認証フロー: `AuthorizationHelper` で Hi Rokid に auth リクエスト、`onActivityResult` (deprecated) で結果受け、`TokenStore` (EncryptedSharedPreferences) で token 永続化、再起動後も復元
 6. ✅ CXRLink 接続: Service が `CXRLink` を生成 → `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`、`onCXRLConnected`/`onGlassBtConnected` 両方 true で **CONNECTED**、フル接続で **`appStart(MainActivity, IGlassAppCbk)`** を 1 回呼んでグラス側を foreground に上げる (これがないと launcher が focus を奪う)。通知本文も状態と連動
+7. ✅ グラス側 `CXRServiceBridge` 統合 + セッション handshake:
+   - `GlassBridge` で `setStatusListener` → `BridgeStatus` を `StateFlow` で公開
+   - `subscribe("rk_custom_client", ...)` で phone からの session メッセージ受信
+   - phone の `ConnectionService` は `appStart` 成功後に `Caps{event:"session_open", ts}` を `sendCustomCmd("rk_custom_client", ...)` で送信、`onDestroy` の `disconnect` 直前に `session_close` を送信
+   - グラス UI: BT 接続 (`BridgeStatus.CONNECTED`) AND `sessionOpen=true` のときだけメッセージ表示、それ以外は **"Phone not connected"** (赤) を表示。BT 物理切断と app 側 `[接続停止]` の両方で即座に切り替わる
 
 ### これから
 6. **CXRLink 接続**: Service が token を使って `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`。接続成功で通知本文を更新

@@ -16,6 +16,7 @@ import com.example.cxrglobal.CXRLink
 import com.example.cxrglobal.CxrDefs
 import com.example.cxrglobal.callbacks.ICXRLinkCbk
 import com.example.cxrglobal.callbacks.IGlassAppCbk
+import com.rokid.cxr.Caps
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,7 @@ private const val CHANNEL_ID = "cxrl_connection"
 private const val NOTIF_ID = 1
 private const val GLASS_APP_PKG = "com.example.hellotoggle.glass"
 private const val GLASS_MAIN_ACTIVITY = "com.example.hellotoggle.glass.MainActivity"
+private const val CHANNEL_TO_GLASS = "rk_custom_client"
 
 class ConnectionService : Service() {
 
@@ -55,6 +57,7 @@ class ConnectionService : Service() {
 
     override fun onDestroy() {
         _running.value = false
+        sendSessionEvent("session_close")
         runCatching { cxrLink?.disconnect() }
         cxrLink = null
         lConnected = false
@@ -114,13 +117,28 @@ class ConnectionService : Service() {
             cxrLink?.appStart(GLASS_MAIN_ACTIVITY, object : IGlassAppCbk {
                 override fun onOpenAppResult(success: Boolean) {
                     Log.d(TAG, "onOpenAppResult: $success")
+                    if (success) sendSessionEvent("session_open")
                 }
 
                 override fun onGlassAppResume(resume: Boolean) {
                     Log.d(TAG, "onGlassAppResume: $resume")
+                    if (resume) sendSessionEvent("session_open")
                 }
             })
         }
+    }
+
+    private fun sendSessionEvent(event: String) {
+        val link = cxrLink ?: return
+        Log.d(TAG, "send $event")
+        val payload = Caps().apply {
+            write("event")
+            write(event)
+            write("ts")
+            writeInt64(System.currentTimeMillis())
+        }.serialize()
+        runCatching { link.sendCustomCmd(CHANNEL_TO_GLASS, payload) }
+            .onFailure { Log.w(TAG, "sendSessionEvent($event) failed", it) }
     }
 
     private fun updateConnectionState(state: CxrConnState, notifText: String) {
