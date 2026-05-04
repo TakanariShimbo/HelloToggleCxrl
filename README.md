@@ -13,6 +13,33 @@
 
 本リポジトリの機能自体は「Hello World 表示のトグル / メッセージ切替」だけの最小サンプルだが、構成要素 (CXR セッション、application-level handshake、heartbeat、状態同期、Foreground Service 常駐) はそのままグラス主導の他アプリにも流用できることを意図している。
 
+## このリポジトリと依存リポジトリ
+
+本リポは **CxrGlobal** ライブラリに依存している。CXR-L の公式 SDK (`com.rokid.cxr:client-l`) は中国版 Hi Rokid (`com.rokid.sprite.aiapp`) にハードコードされていてグローバル版環境では動かないため、グローバル版 (`com.rokid.sprite.global.aiapp`) で動作するよう CxrGlobal が薄いラッパーとして橋渡しをしている。
+
+```
+┌──────────────────────────────────────────┐
+│ HelloToggleCxrl  ← このリポジトリ
+│   phone/  : スマホアプリ (Compose)
+│   glass/  : グラスアプリ (Compose)
+└────┬───────────────────────────┬─────────┘
+     │ ① depends on              │ ② Caps シリアライザ / グラス側 Bridge
+     │ (Gradle composite build)  │ (Rokid maven)
+     ▼                            ▼
+   CxrGlobal              com.rokid.cxr:client-l (phone)
+   (Hi Rokid global       com.rokid.cxr:cxr-service-bridge (glass)
+    対応の薄いラッパー)
+```
+
+| 役割 | リポジトリ / 依存 | 説明 |
+|---|---|---|
+| ① ライブラリ | [TakanariShimbo/CxrGlobal](https://github.com/TakanariShimbo/CxrGlobal) | グローバル版 Hi Rokid 対応の CXR-L 薄いラッパー。本リポは Gradle composite build (`includeBuild("../../CxrGlobal")`) で取り込む |
+| 本体 | **HelloToggleCxrl** (このリポ) | スマホ + グラスの双方向通信サンプル (グラス主導アプリのテンプレート) |
+| ② Caps (phone) | `com.rokid.cxr:client-l:1.0.1` (Rokid maven) | Wire 互換のため本家 SDK の Caps シリアライザだけ借用 |
+| ② Bridge (glass) | `com.rokid.cxr:cxr-service-bridge:1.0-20260212.103714-88` (Rokid maven) | グラス側の `CXRServiceBridge` 実装 |
+
+> 同じ依存関係を使った別の参考実装に [cxrlsample101-global](https://github.com/TakanariShimbo/cxrlsample101-global) がある。Rokid 公式 `CXRLSample` をグローバル対応させたデモで、CustomView / CustomApp / Audio / Photo / CustomCmd の全機能を網羅している。
+
 ## 端末構成
 
 | | phone | glass |
@@ -87,37 +114,73 @@ write("message"), write(<message>)
 write("ts"),      writeInt64(<epoch ms>)
 ```
 
-## 必要な依存
+## 動作要件
 
-- Android Studio (Kotlin 2.2.10 / AGP 9.2.0 / Compose BOM 2026.02.01)
-- **phone**:
-  - `com.example.cxrglobal:lib` (隣接ディレクトリの `../CxrGlobal` を `includeBuild`)
-  - `com.rokid.cxr:client-l:1.0.1` (Caps シリアライザ、Rokid maven)
-  - `androidx.security:security-crypto:1.1.0-alpha06`
-- **glass**:
-  - `com.rokid.cxr:cxr-service-bridge:1.0-20260212.103714-88` (Rokid maven)
+| カテゴリ | 必要条件 | 動作確認済み |
+|---|---|---|
+| スマホ | Android (minSdk 31 / compileSdk 36) | Google Pixel 8 / Android 16 (SDK 36) |
+| グラス | スマホとペアリング済みであること | Rokid Glasses / YodaOS SPRITE 1.18.007-20260427-150201 |
+| Hi Rokid アプリ | グローバル版 (`com.rokid.sprite.global.aiapp`) インストール済み | G1.5.9.0408 (versionCode 10050009) |
+| ビルド環境 | Android Studio (Kotlin 2.2.10 / AGP 9.2.0 / Compose BOM 2026.02.01) | — |
 
-## ビルド・実行
+## セットアップ
+
+### 1. 隣接配置で 2 リポジトリを clone
+
+CxrGlobal は Gradle composite build (`includeBuild("../../CxrGlobal")`) で参照するので **同じ親ディレクトリに並べて** clone する:
 
 ```bash
-export JAVA_HOME=/path/to/android-studio/jbr
-
-# phone
-cd phone && ./gradlew installDebug
-
-# glass
-cd glass && ./gradlew installDebug
+cd ~/AndroidStudioProjects
+git clone https://github.com/TakanariShimbo/CxrGlobal.git
+git clone https://github.com/TakanariShimbo/HelloToggleCxrl.git
+# → CxrGlobal / HelloToggleCxrl が並ぶ
 ```
 
-事前条件:
-- スマホに Hi Rokid (`com.rokid.sprite.global.aiapp`) インストール済 + グラスとペアリング済
-- グラスは YodaOS SPRITE が稼働中
+### 2. SDK パスを設定
 
-実行手順:
-1. スマホでアプリ起動 → `[認証]` (初回のみ、Hi Rokid の認証ダイアログが出る)
-2. `[接続開始]` → 通知バーに Foreground Service の通知が出る
+`phone/local.properties` と `glass/local.properties` のそれぞれに:
+
+```properties
+sdk.dir=/path/to/Android/Sdk
+```
+
+### 3. JDK は Android Studio バンドル JBR を使う
+
+```bash
+export JAVA_HOME=/opt/android-studio/jbr
+export PATH=$JAVA_HOME/bin:$PATH
+```
+
+### 4. グラス側アプリをビルド & グラスへ投入
+
+```bash
+cd HelloToggleCxrl/glass
+./gradlew installDebug
+# (もしくは ./gradlew assembleDebug → adb install で手動)
+```
+
+### 5. スマホ側アプリをビルド & スマホへ投入
+
+```bash
+cd ../phone
+./gradlew installDebug
+```
+
+## 使い方
+
+1. スマホでアプリ起動 → `[認証]` (初回のみ、グローバル版 Hi Rokid の認証ダイアログが出る)
+2. `[接続開始]` → 通知バーに Foreground Service の通知が出る (アプリを閉じても接続は維持される)
 3. グラス側に `com.example.hellotoggle.glass` が自動起動して `Hello World` が表示される
-4. グラスのジェスチャ操作がスマホのログタイムラインに反映される
+4. グラスのジェスチャ操作 (タップ / スワイプ) がスマホのログタイムラインに反映される
+
+接続を切るときはスマホで `[接続停止]`、または通知から戻ってボタン操作。再認証したいときは `[再認証]` で token を破棄。
+
+## トラブルシューティング
+
+- **Hi Rokid 行が `not installed`**: グローバル版 (`com.rokid.sprite.global.aiapp`) がインストールされていない、または `phone/app/src/main/AndroidManifest.xml` の `<queries>` 漏れ
+- **`[接続開始]` 後にグラス画面が変わらない**: token 期限切れ、もしくは Hi Rokid Service がまだグラスとペアリング状態になっていない。Hi Rokid アプリ側でペアリングを再確認、必要なら `[再認証]` → `[認証]`
+- **グラス側が `Phone not connected` のまま**: phone 側 Foreground Service が起動していない、または phone がサイレント kill された (例: `am force-stop`)。スマホで `[接続開始]` を押し直す
+- **ビルド時に `Could not resolve com.example.cxrglobal:lib`**: CxrGlobal リポを並列に clone していない、または `phone/settings.gradle.kts` の `includeBuild` パスが合っていない
 
 ## 既知の制限
 
