@@ -1,6 +1,26 @@
 # HelloToggleCxrl — 仕様書
 
-スマホ ⇄ Rokid グラス を CXRL で繋ぎ、**グラス側のサイドタップで Hello World 表示/非表示をトグル**、その操作ログをスマホ側で確認できる最小サンプルアプリ。
+スマホ ⇄ Rokid グラス を CXRL で繋ぎ、**グラス側のジェスチャで挨拶メッセージを操作** (タップで表示/非表示、スワイプで次/前のメッセージ)、その操作ログをスマホ側で確認できる最小サンプルアプリ。
+
+## 0. 現状 (2026-05-04 時点)
+
+実装済み:
+- グラス用 APK スケルトン (Compose、黒背景、緑テキスト)
+- グラス側ジェスチャハンドリング (`dispatchKeyEvent` で 3 種を捕捉、それ以外は system に流す)
+  - タップ (`KEYCODE_ENTER`) → 表示/非表示トグル
+  - 前スワイプ (`KEYCODE_DPAD_RIGHT`) → 次メッセージ
+  - 後スワイプ (`KEYCODE_DPAD_LEFT`) → 前メッセージ
+  - メッセージリスト: `Hello World` / `こんにちは` / `Bonjour` / `안녕`
+  - DPAD_UP/DOWN (スワイプの副キー) は消費して無視
+  - BACK (1本指ダブルタップ) は通す = アプリが閉じる
+
+未実装:
+- スマホ側 UI (今は scaffold のみ、ログ表示なし)
+- CXR 認証 / 接続 / 通信 (両側とも SDK 統合なし)
+- Foreground Service
+- 接続状態に応じた UI 切替 ("Phone not connected" 表示)
+
+> ジェスチャ→キーコードの対応根拠は `../GlassGestureProbe/GLASS_GESTURES.md` 参照。実機の `/system/usr/keylayout/Generic.kl` で確認済み。
 
 ## 1. 概要
 
@@ -16,9 +36,9 @@
 | --- | --- | --- |
 | パッケージ案 | `com.example.hellotoggle.phone` | `com.example.hellotoggle.glass` |
 | SDK | `CXRLink` + `AuthorizationHelper` | `CXRServiceBridge` |
-| 主な責務 | 初回認証 / 接続維持 / ログ表示 | UI 描画 / タップ入力 / トグル状態管理 |
-| UI のメイン | 接続状態 + トグル操作ログのタイムライン | "Hello World" or "未接続" の単一画面 |
-| 状態の真実点 | (持たない、ログのみ) | **トグル ON/OFF を保持** |
+| 主な責務 | 初回認証 / 接続維持 / ログ表示 | UI 描画 / ジェスチャ入力 / 表示状態管理 |
+| UI のメイン | 接続状態 + 操作ログのタイムライン | 現在のメッセージ or "未接続" の単一画面 |
+| 状態の真実点 | (持たない、ログのみ) | **可視/非可視 + メッセージ index を保持** |
 | バックグラウンド | **Foreground Service で常駐** | 通常 Activity (Hi Rokid 管理下なので常駐は CXR ランタイム任せ) |
 
 > 真実点をグラス側に置く理由: ユーザー操作はグラスで起こり、UI もグラスで完結するため。スマホはあくまで観測役。
@@ -39,11 +59,17 @@
 ### 3.2 通常運用
 
 1. グラスを掛ける → グラスにアプリが立ち上がる
-2. **接続あり**: 中央に "Hello World" (もしくは非表示) の現在状態が表示される
+2. **接続あり**: 中央に現在のメッセージ (例 "Hello World") を表示。非表示状態のときは黒画面
 3. **接続なし**: 中央に "Phone not connected" を赤色で常時表示
-4. グラス側面を**シングルタップ** → 表示/非表示トグル
-5. グラスはトグルと同時に `rk_custom_key` チャンネルでスマホへイベント送信
+4. グラス側面を以下のジェスチャで操作:
+   - **シングルタップ** (`KEYCODE_ENTER`) → 表示/非表示トグル
+   - **前スワイプ** (`KEYCODE_DPAD_RIGHT`) → 次のメッセージへ (リストの末尾でループ)
+   - **後スワイプ** (`KEYCODE_DPAD_LEFT`) → 前のメッセージへ
+5. 各操作のたびにグラスは `rk_custom_key` チャンネルでスマホへ状態スナップショット送信
 6. スマホ側 ConnectionService が受信 → 通知バーの常駐通知に最新ログ反映 + Activity 起動中ならログ画面に追記
+7. ダブルタップ (BACK) でグラス側アプリを閉じる (アプリ側で消費しないので system が処理)
+
+> ジェスチャの根拠は `GlassGestureProbe/GLASS_GESTURES.md` の「アプリで使える操作 (3 種、推奨)」表を参照。それ以外 (1本指長押し / 2本指系 / カメラボタン) は Hi Rokid OS が消費するためアプリでは使わない。
 
 ### 3.3 復帰フロー
 
@@ -58,7 +84,7 @@
 | チャンネル名 | 方向 | 用途 |
 | --- | --- | --- |
 | `rk_custom_client` | スマホ → グラス | (今回は未使用、将来拡張余地として確保) |
-| `rk_custom_key` | グラス → スマホ | トグルイベント送信 |
+| `rk_custom_key` | グラス → スマホ | ジェスチャ操作の状態スナップショット送信 |
 
 > サンプルの命名慣行をそのまま踏襲。送信側 API: スマホ `cxrLink.sendCustomCmd(key, bytes)`、グラス `cxrBridge.sendMessage(key, bytes)`。
 
@@ -66,14 +92,20 @@
 
 **グラス → スマホ (`rk_custom_key`)**
 
+ジェスチャ発生のたびに「直後の状態スナップショット」を送る。イベント種別 (tap/swipe_next/swipe_prev) も付け、スマホ側ログを richer にする。
+
 ```
 Caps {
-    write("event")            // 種別タグ ("toggle")
-    write("toggle")
-    write("visible")          // フィールド名
+    write("event")            // 種別タグ
+    write(<event>)            // "tap" | "swipe_next" | "swipe_prev"
+    write("visible")
     write(<Boolean as Int>)   // 1 = 表示中, 0 = 非表示
+    write("index")
+    write(<Int>)              // 0..3 (現在のメッセージ index)
+    write("message")
+    write(<String>)            // 現在のメッセージ文字列 (デバッグ容易化)
     write("ts")
-    write(<epoch millis>)     // long
+    write(<Long>)             // epoch millis
 }
 ```
 
@@ -102,34 +134,36 @@ Caps {
    - `[再認証]` (token 破棄)
 3. **ログタイムライン** (LazyColumn)
    - 最大 200 件、新しいものが上
-   - 各行: `HH:mm:ss.SSS  visible=true`
+   - 各行: `HH:mm:ss.SSS  [tap] visible=true index=0 "Hello World"`
    - "Clear" ボタンで空に
 
 ### 5.2 グラス Glass
 
 **MainActivity** (Compose、黒背景)
 
-- 接続あり & トグル ON: 中央に大きく **"Hello World"** (緑 #00AF00、サンプルの `GreenText` 流用)
-- 接続あり & トグル OFF: 何も表示しない (黒画面)
+- 接続あり & 可視: 中央に大きく現在の **メッセージ** (緑 #00AF00、`MESSAGES[index]`)
+- 接続あり & 非可視: 何も表示しない (黒画面)
 - 接続なし: 中央に **"Phone not connected"** (赤 #C04040、点滅なし)
 - 右下小さく現在の接続状態テキスト (デバッグ用、release ではフラグで非表示可)
+- メッセージリスト: `["Hello World", "こんにちは", "Bonjour", "안녕"]` (将来は phone から push する余地あり)
 
 ## 6. ステートマシン
 
 ### 6.1 グラス側 (UI 状態)
 
+ローカル状態は `(visible: Boolean, index: Int)` の 2 つ。各ジェスチャがそれぞれ片方を変える。
+
 ```
-            tap (CLICK)
-   HIDDEN  ───────────►  VISIBLE
-      ▲                     │
-      └─────── tap ─────────┘
+   tap          : visible = !visible
+   swipe_next   : index   = (index + 1) mod N
+   swipe_prev   : index   = (index - 1) mod N
 
   どちらの状態でも、phone が disconnect になると → DISCONNECTED 表示にオーバレイ
-  reconnect すると元の HIDDEN/VISIBLE に戻る (状態は保持)
+  reconnect すると元の (visible, index) に戻る (状態は保持)
 ```
 
-- 真実点はグラス側 ViewModel の `visible: StateFlow<Boolean>`
-- タップ受信 → `visible = !visible` → スマホへ送信
+- 真実点はグラス側 ViewModel の `state: StateFlow<UiState>` (`visible`, `index`)
+- 状態変化のたびにスマホへ snapshot 送信
 
 ### 6.2 スマホ側 (Service 状態)
 
@@ -219,17 +253,22 @@ HelloToggleCxrl/
 
 > Android プロジェクト本体は `./gradlew` 単独初期化が公式に存在しないため、**Android Studio の New Project から phone/ glass/ それぞれ作成する** (CLAUDE.md の方針)。
 
-## 10. 実装順序 (推奨)
+## 10. 実装順序
 
-1. グラス側 `MainActivity` に静的な "Hello World" (緑) と "Phone not connected" (赤) のスイッチ表示を作る
-2. グラス側で `KeyReceiver` を組み込み、CLICK でローカルにトグル
-3. スマホ側に Foreground Service の雛形 (token なし、接続もしないが常駐するだけ) を作って通知が出ることを確認
-4. スマホ側 `MainActivity` に認証フローを移植 (`cxrlsample101/MainViewModel.kt` 参照)、token を `TokenStore` に保存
-5. Service が token を使って `CXRLink.connect()` する経路を作る、connect 成功で通知本文を更新
-6. グラス側 `CXRServiceBridge` をセットアップ、`StatusListener` でスマホ接続状態をフックして UI を切替
-7. グラス側からトグル時に `sendMessage("rk_custom_key", caps)` を送出
-8. スマホ側 Service の `ICustomCmdCbk.onCustomCmdResult` で受けて、Activity (起動中なら) と通知へログを伝搬
-9. 自動再接続・token 破棄・エラー UI を仕上げ
+### 完了済み
+1. ✅ グラス側 `MainActivity` の Compose スケルトン (黒背景、緑テキストで "Hello World")
+2. ✅ グラス側ジェスチャハンドリング (tap / swipe_next / swipe_prev → ローカル状態更新、`dispatchKeyEvent` で 3 種を捕捉、BACK は通す)
+
+### これから
+
+3. **スマホ側 UI スケルトン**: `MainActivity` に接続状態カード + ログタイムラインの空枠 (Compose) を作る。CXR 配線なし、ダミーログを流して見た目を確認
+4. **Foreground Service の雛形**: `ConnectionService` を作る。token なし・接続なしで起動するだけ。`startForeground` で常駐通知が出ることだけ確認
+5. **スマホ側認証フロー**: `MainActivity` に `AuthorizationHelper` を組み込み (`cxrlsample101/MainViewModel.kt` 参照)、token を `TokenStore` (EncryptedSharedPreferences) に保存
+6. **CXRLink 接続**: Service が token を使って `configCXRSession(CUSTOMAPP, glassPkg)` → `connect(token)`。接続成功で通知本文を更新
+7. **グラス側 CXRServiceBridge**: `setStatusListener` でスマホ接続状態を StateFlow に流す → 切断時 "Phone not connected" 表示にオーバレイ
+8. **メッセージ送信**: グラスの状態変化のたびに `sendMessage("rk_custom_key", caps)` を送出 (Caps の組み立ては §4.2)
+9. **メッセージ受信**: スマホ側 Service の `ICustomCmdCbk.onCustomCmdResult` でデコード、Activity (起動中なら) と通知へログを伝搬
+10. **仕上げ**: 自動再接続・token 破棄・エラー UI
 
 ## 11. オープン課題
 
