@@ -77,7 +77,13 @@ object GlassBridge {
                             _sessionOpen.value = false
                             stopPingWatchdog()
                         }
-                        "ping" -> armPingWatchdog()
+                        "ping" -> {
+                            // ping is proof the phone is alive in an active session.
+                            // Treat it as session_open in case we missed the original session_open
+                            // (race when glass app is just launching and hasn't subscribed yet).
+                            _sessionOpen.value = true
+                            armPingWatchdog()
+                        }
                     }
                 }
             })
