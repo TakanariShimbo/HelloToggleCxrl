@@ -1,9 +1,12 @@
 package com.example.hellotoggle.phone
 
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +43,15 @@ import java.util.Locale
 
 private val timeFmt = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 private const val MAX_LOG = 200
+private const val HI_ROKID_PKG = "com.rokid.sprite.global.aiapp"
+
+private fun isPackageInstalled(context: Context, pkg: String): Boolean =
+    try {
+        context.packageManager.getPackageInfo(pkg, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
 
 data class LogEntry(
     val ts: Long,
@@ -80,7 +92,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen(modifier: Modifier = Modifier) {
-    var hiRokidInstalled by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val hiRokidInstalled = remember { isPackageInstalled(context, HI_ROKID_PKG) }
     var authorized by remember { mutableStateOf(false) }
     var connection by remember { mutableStateOf(ConnectionState.DISCONNECTED) }
     val entries by PhoneLog.entries.collectAsState()
