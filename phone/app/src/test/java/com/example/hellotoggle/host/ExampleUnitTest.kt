@@ -1,4 +1,4 @@
-package com.example.hellotoggle.glass
+package com.example.hellotoggle.host
 
 import org.junit.Test
 

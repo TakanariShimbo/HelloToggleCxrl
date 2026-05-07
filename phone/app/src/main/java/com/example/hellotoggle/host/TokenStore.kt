@@ -1,4 +1,4 @@
-package com.example.hellotoggle.phone
+package com.example.hellotoggle.host
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences

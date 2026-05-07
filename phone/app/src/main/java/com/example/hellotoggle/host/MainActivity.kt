@@ -1,4 +1,4 @@
-package com.example.hellotoggle.phone
+package com.example.hellotoggle.host
 
 import android.Manifest
 import android.content.Context
@@ -41,7 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.hellotoggle.phone.ui.theme.PhoneTheme
+import com.example.hellotoggle.host.ui.theme.HelloToggleCxrlHostTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         TokenStore.load(this)
         setContent {
-            PhoneTheme {
+            HelloToggleCxrlHostTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     MainScreen(
                         modifier = Modifier.padding(innerPadding),

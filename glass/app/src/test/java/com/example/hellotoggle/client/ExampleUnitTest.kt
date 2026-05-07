@@ -1,4 +1,4 @@
-package com.example.hellotoggle.phone
+package com.example.hellotoggle.client
 
 import org.junit.Test
 

@@ -1,4 +1,4 @@
-package com.example.hellotoggle.glass
+package com.example.hellotoggle.host
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.example.hellotoggle.glass", appContext.packageName)
+        assertEquals("com.example.hellotoggle.host", appContext.packageName)
     }
 }

@@ -1,4 +1,4 @@
-package com.example.hellotoggle.phone
+package com.example.hellotoggle.host
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.asStateFlow
 private const val TAG = "ConnectionService"
 private const val CHANNEL_ID = "cxrl_connection"
 private const val NOTIF_ID = 1
-private const val GLASS_APP_PKG = "com.example.hellotoggle.glass"
-private const val GLASS_MAIN_ACTIVITY = "com.example.hellotoggle.glass.MainActivity"
+private const val GLASS_APP_PKG = "com.example.hellotoggle.client"
+private const val GLASS_MAIN_ACTIVITY = "com.example.hellotoggle.client.MainActivity"
 private const val CHANNEL_TO_GLASS = "rk_custom_client"
 private const val CHANNEL_FROM_GLASS = "rk_custom_key"
 private const val HEARTBEAT_INTERVAL_MS = 5_000L

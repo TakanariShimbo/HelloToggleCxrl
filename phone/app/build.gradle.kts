@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.hellotoggle.phone"
+    namespace = "com.example.hellotoggle.host"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -12,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.hellotoggle.phone"
+        applicationId = "com.example.hellotoggle.host"
         minSdk = 31
         targetSdk = 36
         versionCode = 1

@@ -1,4 +1,4 @@
-package com.example.hellotoggle.glass
+package com.example.hellotoggle.client
 
 import android.os.Bundle
 import android.view.KeyEvent

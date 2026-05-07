@@ -45,7 +45,8 @@
 | | phone | glass |
 |---|---|---|
 | 端末 | Pixel 8 (Android 14+) | Rokid Glasses (YodaOS SPRITE / Android 12 ベース) |
-| パッケージ | `com.example.hellotoggle.phone` | `com.example.hellotoggle.glass` |
+| 表示名 | `HelloToggleCxrl Host` | `HelloToggleCxrl Client` |
+| パッケージ | `com.example.hellotoggle.host` | `com.example.hellotoggle.client` |
 | 役割 | 認証 / 接続維持 / ログ受信表示 (バックグラウンド) | UI 描画 / ジェスチャ入力 / イベント送信 (主役) |
 
 ## 動作概要
@@ -170,7 +171,7 @@ cd ../phone
 
 1. スマホでアプリ起動 → `[認証]` (初回のみ、グローバル版 Hi Rokid の認証ダイアログが出る)
 2. `[接続開始]` → 通知バーに Foreground Service の通知が出る (アプリを閉じても接続は維持される)
-3. グラス側に `com.example.hellotoggle.glass` が自動起動して `Hello World` が表示される
+3. グラス側に `com.example.hellotoggle.client` が自動起動して `Hello World` が表示される
 4. グラスのジェスチャ操作 (タップ / スワイプ) がスマホのログタイムラインに反映される
 
 接続を切るときはスマホで `[接続停止]`、または通知から戻ってボタン操作。再認証したいときは `[再認証]` で token を破棄。

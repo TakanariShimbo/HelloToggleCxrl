@@ -1,4 +1,4 @@
-package com.example.hellotoggle.glass.ui.theme
+package com.example.hellotoggle.host.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
